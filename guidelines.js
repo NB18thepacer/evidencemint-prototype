@@ -52,5 +52,6 @@
     const n = rules.length + 1;
     rules.push({id:`DG-${String(n).padStart(3,'0')}`, category, title:text.replace(/[.?!]$/,'').slice(0,74), text, severity:[0,1,2,3].includes(index%5)?'Standard':'High', source:'Northstar demo brand handbook · v1.0'});
   }));
-  window.EVIDENCEMINT_GUIDELINES = rules;
+  if (typeof window !== 'undefined') window.EVIDENCEMINT_GUIDELINES = rules;
+  if (typeof module !== 'undefined' && module.exports) module.exports = rules;
 })();
