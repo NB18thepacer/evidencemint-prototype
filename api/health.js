@@ -22,6 +22,6 @@ module.exports = function handler(req, res) {
     service: 'EvidenceMint review API',
     groqConfigured: Boolean(process.env.GROQ_API_KEY),
     guidelineCount: require('../guidelines.js').length,
-    reviewMode: 'guideline-only; no PDF extraction or web research'
+    reviewMode: 'guideline-only; selectable PDF text is extracted in the browser; no web research'
   });
 };
