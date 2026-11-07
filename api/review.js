@@ -13,44 +13,6 @@ const MAX_REQUESTS_PER_WINDOW = 6;
 // authentication are needed before treating this public endpoint as production-ready.
 const requestBuckets = new Map();
 
-const schema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    summary: { type: 'string' },
-    findings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          quote: { type: 'string' },
-          issue_type: { type: 'string', enum: ['guideline_conflict', 'evidence_needed', 'clarity'] },
-          priority: { type: 'string', enum: ['low', 'medium', 'high'] },
-          guideline_ids: { type: 'array', items: { type: 'string' } },
-          explanation: { type: 'string' },
-          suggested_revision: { type: 'string' },
-          external_verification_required: { type: 'boolean' }
-        },
-        required: ['quote', 'issue_type', 'priority', 'guideline_ids', 'explanation', 'suggested_revision', 'external_verification_required']
-      }
-    },
-    claims_requiring_external_verification: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          claim: { type: 'string' },
-          reason: { type: 'string' }
-        },
-        required: ['claim', 'reason']
-      }
-    }
-  },
-  required: ['summary', 'findings', 'claims_requiring_external_verification']
-};
-
 function setCors(req, res) {
   const origin = req.headers.origin;
   if (origin && !ALLOWED_ORIGINS.has(origin)) return false;
@@ -104,6 +66,7 @@ module.exports = async function handler(req, res) {
     'Do not claim a factual statement is true, false, current, or outdated: no web search or approved-fact database is connected in this phase. Put factual claims that need research in claims_requiring_external_verification.',
     'Do not invent sources, facts, guideline IDs, or legal conclusions. Keep suggestions faithful to the creator intent. Use an empty suggested_revision if no safe edit can be proposed.',
     'Keep the result concise while preserving completeness: return every relevant finding and every distinct factual claim needing external verification, but do not list guidelines that have no issue. Quote only the relevant short claim or sentence. Keep each explanation and revision brief.',
+    'Return exactly one valid JSON object with these keys: summary, findings, claims_requiring_external_verification. Each finding must include quote, issue_type, priority, guideline_ids, explanation, suggested_revision, external_verification_required. issue_type must be guideline_conflict, evidence_needed, or clarity; priority must be low, medium, or high. Each external claim must include claim and reason. Do not use Markdown fences or text outside the JSON object.',
     'Guideline pack:',
     rules
   ].join('\n\n');
@@ -126,10 +89,7 @@ module.exports = async function handler(req, res) {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: 'evidencemint_guideline_review', strict: true, schema }
-        }
+        response_format: { type: 'json_object' }
       }),
       signal: AbortSignal.timeout(25000)
     });
@@ -149,11 +109,21 @@ module.exports = async function handler(req, res) {
     catch { return res.status(502).json({ error: 'The AI response could not be parsed. Please retry.' }); }
 
     const validIds = new Set(guidelines.map(rule => rule.id));
-    const findings = (Array.isArray(review.findings) ? review.findings : []).map((finding, index) => ({
-      id: `ai-${index + 1}`,
-      ...finding,
-      guideline_ids: (Array.isArray(finding.guideline_ids) ? finding.guideline_ids : []).filter(id => validIds.has(id))
-    })).filter(finding => finding.guideline_ids.length > 0);
+    const validIssueTypes = new Set(['guideline_conflict', 'evidence_needed', 'clarity']);
+    const validPriorities = new Set(['low', 'medium', 'high']);
+    const findings = (Array.isArray(review.findings) ? review.findings : []).map((finding, index) => {
+      const item = finding && typeof finding === 'object' ? finding : {};
+      return {
+        id: `ai-${index + 1}`,
+        quote: typeof item.quote === 'string' ? item.quote.slice(0, 500) : 'Unspecified article text',
+        issue_type: validIssueTypes.has(item.issue_type) ? item.issue_type : 'evidence_needed',
+        priority: validPriorities.has(item.priority) ? item.priority : 'medium',
+        guideline_ids: (Array.isArray(item.guideline_ids) ? item.guideline_ids : []).filter(id => validIds.has(id)),
+        explanation: typeof item.explanation === 'string' ? item.explanation.slice(0, 1200) : 'Review this content against the cited guideline.',
+        suggested_revision: typeof item.suggested_revision === 'string' ? item.suggested_revision.slice(0, 1200) : '',
+        external_verification_required: Boolean(item.external_verification_required)
+      };
+    }).filter(finding => finding.guideline_ids.length > 0);
 
     return res.status(200).json({
       ok: true,
@@ -161,9 +131,12 @@ module.exports = async function handler(req, res) {
       external_research_performed: false,
       factual_claims_verified: false,
       model: data.model || model,
-      summary: review.summary,
+      summary: typeof review.summary === 'string' ? review.summary.slice(0, 2000) : 'Review completed. Check the findings and cited guidelines.',
       findings,
-      claims_requiring_external_verification: Array.isArray(review.claims_requiring_external_verification) ? review.claims_requiring_external_verification : [],
+      claims_requiring_external_verification: (Array.isArray(review.claims_requiring_external_verification) ? review.claims_requiring_external_verification : []).map(claim => ({
+        claim: typeof claim?.claim === 'string' ? claim.claim.slice(0, 500) : 'Unspecified factual claim',
+        reason: typeof claim?.reason === 'string' ? claim.reason.slice(0, 800) : 'Needs an external source check.'
+      })),
       guideline_pack_size: guidelines.length
     });
   } catch (error) {
