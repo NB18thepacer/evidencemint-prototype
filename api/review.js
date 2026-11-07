@@ -121,7 +121,7 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         model,
         temperature: 0.1,
-        max_tokens: 5000,
+        max_completion_tokens: 5000,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -135,8 +135,10 @@ module.exports = async function handler(req, res) {
     });
 
     if (!upstream.ok) {
-      console.error('Groq request failed with status', upstream.status);
-      return res.status(502).json({ error: 'The AI review request failed. Check the Vercel function logs and model configuration.' });
+      const errorBody = await upstream.json().catch(() => ({}));
+      const providerMessage = String(errorBody?.error?.message || 'No provider detail returned.').slice(0, 500);
+      console.error('Groq request failed with status', upstream.status, '-', providerMessage);
+      return res.status(502).json({ error: 'The AI review request failed. Check the Vercel function logs for the provider detail.' });
     }
     const data = await upstream.json();
     const content = data?.choices?.[0]?.message?.content;
