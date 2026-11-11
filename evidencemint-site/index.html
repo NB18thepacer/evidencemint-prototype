@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f9f7f2">
+  <title>EvidenceMint — Review with confidence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@1,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="guidelines.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div id="landing" class="landing-view">
+    <header class="site-nav wrap">
+      <a class="brand" href="#top" aria-label="EvidenceMint home"><span class="brand-mark">e<span>✓</span></span><span>evidence<span class="brand-light">mint</span></span></a>
+      <div class="nav-notch"><span class="live-dot"></span><span>CLAIM REVIEW</span><span class="notch-sep"></span><span>Evidence-led · Human-approved</span></div>
+      <button class="button button-dark button-small" data-open-app>Open workspace <span>↗</span></button>
+    </header>
+    <main id="top">
+      <section class="hero">
+        <div class="hero-haze haze-one"></div><div class="hero-haze haze-two"></div><div class="hero-haze haze-three"></div>
+        <div class="hero-inner wrap">
+          <p class="eyebrow"><span class="eyebrow-line"></span> PRE-PUBLICATION CONTENT REVIEW</p>
+          <h1>Publish with<br>evidence. <em>Not guesswork.</em></h1>
+          <p class="hero-copy">Check article claims against company guidelines and credible sources, then put the final call in a human reviewer’s hands.</p>
+          <div class="hero-actions"><button class="button button-dark" data-open-app>Explore the demo <span>→</span></button><a class="button button-soft" href="#workflow">See how it works</a></div>
+          <div class="hero-trust"><span>BUILT AROUND</span><i></i><span>Approved guidelines</span><i></i><span>Traceable evidence</span><i></i><span>Human decisions</span></div>
+          <div class="hero-preview" aria-label="Illustration of a claim review card">
+            <div class="preview-top"><span class="preview-dots"><b></b><b></b><b></b></span><span>REVIEW · ARTICLE V03</span><span class="preview-status">2 findings</span></div>
+            <div class="preview-row"><span class="status-icon status-warn">!</span><div><strong>“Trusted by 15,000 teams”</strong><small>Unsupported claim · No approved evidence found</small></div><span class="preview-arrow">↗</span></div>
+            <div class="preview-row"><span class="status-icon status-ok">✓</span><div><strong>“Setup in about 10 minutes”</strong><small>Supported · Product fact PF-014</small></div><span class="preview-arrow">↗</span></div>
+            <div class="preview-footer"><span class="mini-avatar">R</span><span>Human review keeps the final say</span><span class="preview-lock">VERSION LOCKED</span></div>
+          </div>
+        </div>
+        <div class="hero-ridge ridge-a"></div><div class="hero-ridge ridge-b"></div>
+      </section>
+      <section id="workflow" class="workflow-section">
+        <div class="wrap">
+          <div class="section-heading centered"><p class="eyebrow">A CLEAR PATH TO APPROVAL</p><h2>Less second-guessing.<br><em>More confidence to publish.</em></h2><p>EvidenceMint takes a draft from first check to a human decision, with the evidence and version history attached.</p></div>
+          <div class="workflow-cards">
+            <article class="workflow-card"><span class="step-num">01</span><div class="workflow-icon icon-file">↥</div><h3>Share the draft</h3><p>Upload an article PDF and tell EvidenceMint what you want to communicate.</p><span class="step-label">CREATOR · SUBMIT</span></article>
+            <article class="workflow-card"><span class="step-num">02</span><div class="workflow-icon icon-check">⌕</div><h3>Review the evidence</h3><p>Check findings against the company’s guideline pack and trace each flag to its source.</p><span class="step-label">AI REVIEW · NEXT PHASE</span></article>
+            <article class="workflow-card"><span class="step-num">03</span><div class="workflow-icon icon-human">✓</div><h3>Get a human decision</h3><p>Revise, challenge a finding, or send the exact draft version to an authorised reviewer.</p><span class="step-label">REVIEWER · APPROVE OR RETURN</span></article>
+          </div>
+        </div>
+      </section>
+      <section class="features-section wrap">
+        <div class="section-title-row"><div><p class="eyebrow">MADE FOR CAREFUL PUBLISHING</p><h2>Every finding has<br><em>a reason to be there.</em></h2></div><p>EvidenceMint is designed to make review understandable for creators and actionable for reviewers.</p></div>
+        <div class="feature-grid">
+          <article class="feature-card feature-wide"><div class="feature-art art-orange"><div class="ledger-mini"><span>CLAIMS & EVIDENCE LEDGER</span><div><b>SUPPORTED</b><strong>Setup takes about 10 minutes</strong><small>Product fact · PF-014 ↗</small></div><div><b class="tag-warn">NEEDS EVIDENCE</b><strong>Trusted by 15,000 teams</strong><small>No approved source linked ↗</small></div></div></div><h3>Claims & Evidence Ledger</h3><p>See each factual claim, its status, and the exact approved fact or source behind the finding.</p></article>
+          <article class="feature-card"><div class="feature-art art-blue"><div class="source-mini"><span class="source-stamp">SOURCE-LOCKED</span><p>“The plan starts at $29 per month.”</p><div class="source-line">↳ Approved pricing · PR-002</div></div></div><h3>Source-linked flags</h3><p>Reviewers and creators can inspect why a claim was flagged.</p></article>
+          <article class="feature-card"><div class="feature-art art-blush"><div class="version-mini"><span>APPROVAL RECORD</span><strong>Article · Version 03</strong><div><i></i>Reviewed by Policy Reviewer</div><b>APPROVED</b></div></div><h3>Version-bound approval</h3><p>A decision applies to the exact draft the reviewer checked.</p></article>
+          <article class="feature-card"><div class="feature-art art-lilac"><div class="suggest-mini"><span>TRY THIS REVISION</span><p>“Trusted by teams across 12 countries.”</p><button>Accept suggestion</button><small>Creator can edit or decline</small></div></div><h3>Creator stays in control</h3><p>Suggestions are optional. The creator can revise, reject, or challenge a flag.</p></article>
+          <article class="feature-card"><div class="feature-art art-cream"><div class="review-mini"><span>REVIEWER INBOX</span><strong>Finding challenged</strong><p>“I believe this is supported by the attached report.”</p><div><button>Confirm flag</button><button>Dismiss</button></div></div></div><h3>Human escalation</h3><p>Disputed findings can be sent to an authorised reviewer with context.</p></article>
+          <article class="feature-card"><div class="feature-art art-mint"><div class="web-mini"><span>WEB SOURCES · AI PHASE</span><div>↗ Source title · publisher · date</div><div>↗ Supporting page · publication date</div><small>Web research will be connected after the UI prototype.</small></div></div><h3>Research with citations</h3><p>Planned web research will return source details alongside relevant claim checks.</p></article>
+        </div>
+      </section>
+      <section class="benefits-section"><div class="wrap"><p class="eyebrow">DESIGNED FOR A TRUSTWORTHY REVIEW</p><div class="benefits-grid"><div><span>01</span><strong>Readable findings</strong><small>Plain language with a clear next step.</small></div><div><span>02</span><strong>One version at a time</strong><small>Changes after approval need another review.</small></div><div><span>03</span><strong>Challenge a flag</strong><small>Creators can ask a person to verify it.</small></div><div><span>04</span><strong>Fixed demo guideline pack</strong><small>150 fictional rules for the prototype.</small></div><div><span>05</span><strong>Decision history</strong><small>Reviewer decisions include a reason.</small></div><div><span>06</span><strong>Human approval</strong><small>EvidenceMint marks ready; people decide.</small></div></div></div></section>
+      <section class="cta-section"><div class="wrap cta-inner"><p class="eyebrow">EVIDENCEMINT · TEAM NAS</p><h2>Make the next<br>claim <em>clearer.</em></h2><p>Explore the AI guideline review workflow with a fictional company and sample content.</p><button class="button button-dark" data-open-app>Open the workspace <span>→</span></button><small>AI checks pasted or extracted text against fictional guidelines · scanned-PDF OCR and web research are not connected yet</small></div></section>
+    </main>
+    <footer class="site-footer wrap"><a class="brand" href="#top"><span class="brand-mark">e<span>✓</span></span><span>evidence<span class="brand-light">mint</span></span></a><span>TEAM NAS · Prototype workspace</span><span>Guidelines first. People decide.</span></footer>
+  </div>
+
+  <div id="app" class="app-view hidden">
+    <header class="app-topbar"><button class="icon-button mobile-menu" id="menu-toggle" aria-label="Open menu">☰</button><a class="brand" href="#" id="brand-home"><span class="brand-mark">e<span>✓</span></span><span>evidence<span class="brand-light">mint</span></span></a><div class="topbar-center"><span class="live-dot"></span><strong>TEAM WORKSPACE</strong><span class="topbar-divider"></span><span>Northstar Demo Co. <span class="fictional">FICTIONAL</span></span></div><div class="topbar-actions"><button class="button button-soft button-small" id="back-landing">← About</button><button class="button button-soft button-small hidden" id="refresh-workspace">↻ Refresh</button><button class="button button-soft button-small" id="account-button">Team sign in</button><div class="role-select-wrap" id="demo-role-wrap"><label for="role-select">VIEW AS · DEMO</label><select id="role-select"><option value="creator">Creator</option><option value="reviewer">Reviewer</option></select></div><span class="user-avatar" id="user-avatar">C</span></div></header>
+    <div class="app-shell"><aside class="sidebar" id="sidebar"><div class="workspace-label">WORKSPACE</div><button class="side-link active" data-page="overview"><span>▦</span> Overview</button><button class="side-link" data-page="new-review"><span>＋</span> New review</button><button class="side-link" data-page="history"><span>◷</span> My reviews <b class="side-count" id="my-count">0</b></button><button class="side-link reviewer-nav hidden" data-page="inbox"><span>✉</span> Reviewer inbox <b class="side-count" id="inbox-count">0</b></button><button class="side-link" data-page="guidelines"><span>▤</span> Guideline pack <b class="side-count">150</b></button><div class="sidebar-bottom"><div class="sidebar-note"><span class="live-dot"></span><div><strong>AI guideline review connected</strong><small>Selectable PDF text extraction is connected · scanned OCR and web research are not</small></div></div><button class="side-link" data-page="help">ⓘ How this demo works</button></div></aside>
+      <main class="app-main" id="app-main"><div id="page-content"></div></main></div>
+    <div id="toast" class="toast" role="status"></div>
+  </div>
+  <dialog id="account-dialog" class="account-dialog"><form id="account-form"><h2>Team workspace</h2><p>Sign in or create a team account to share reviews across devices.</p><label class="field-label" for="account-mode">Action</label><select class="text-input" id="account-mode"><option value="signin">Sign in</option><option value="create">Create account</option></select><label class="field-label" for="account-name">Your name</label><input class="text-input" id="account-name" autocomplete="name" placeholder="Full name"><label class="field-label" for="account-email">Email</label><input class="text-input" id="account-email" type="email" autocomplete="email" required><label class="field-label" for="account-password">Password</label><input class="text-input" id="account-password" type="password" autocomplete="current-password" minlength="8" required><label class="field-label" for="account-role">Team role</label><select class="text-input" id="account-role"><option value="creator">Creator</option><option value="reviewer">Reviewer</option><option value="admin">Admin</option></select><label class="field-label" for="account-code">Invite code</label><input class="text-input" id="account-code" type="password" required><p class="field-hint">The team admin shares the correct invite code privately. Never put invite codes or API keys in the public repository.</p><div class="decision-actions"><button class="button button-dark button-small" id="account-submit" type="submit">Continue</button><button class="button button-soft button-small" id="account-close" type="button">Cancel</button></div><div class="account-error" id="account-error" role="status"></div></form></dialog>
+</body>
+</html>
