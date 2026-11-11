@@ -10,6 +10,52 @@
   let pdfjsLoading = null;
   let toastTimer = null;
   let state = load();
+  let cloudClient = null;
+  let cloudProfile = null;
+  let cloudRecords = [];
+
+  async function initCloud(){
+    try{
+      const configResponse=await fetch('/api/config');
+      const config=await configResponse.json();
+      if(!config.cloudConfigured||!window.supabase?.createClient)return;
+      cloudClient=window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey);
+      const {data}=await cloudClient.auth.getSession();
+      if(data.session)await refreshCloud();
+    }catch(error){console.warn('Shared workspace initialization skipped:',error?.message||error);}
+    renderApp();
+  }
+  async function cloudRequest(method='GET',body=null){
+    if(!cloudClient)throw new Error('Shared workspace is not configured yet.');
+    const {data}=await cloudClient.auth.getSession();
+    const response=await fetch('/api/cloud',{method,headers:{...(method==='POST'?{'Content-Type':'application/json'}:{}),Authorization:`Bearer ${data.session?.access_token||''}`},...(body?{body:JSON.stringify(body)}:{})});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(result.error||`Workspace request failed (${response.status}).`);
+    return result;
+  }
+  async function refreshCloud(){
+    const result=await cloudRequest();cloudProfile=result.profile;cloudRecords=result.records||[];
+    state.role=['admin','reviewer'].includes(cloudProfile.role)?'reviewer':'creator';
+    state.drafts=(result.reviews||[]).map(item=>item.payload?{...item.payload,createdBy:item.creator_id}:null).filter(Boolean);save();renderApp();
+  }
+  async function persistDraft(draft){
+    if(!cloudProfile)return;
+    try{await cloudRequest('POST',{action:'save-review',draft:{id:draft.id,payload:draft}});}
+    catch(error){toast(`Cloud sync failed: ${error.message}`);}
+  }
+  async function handleAccount(event){
+    event.preventDefault();const message=$('#account-error');const mode=$('#account-mode').value;const email=$('#account-email').value.trim();const password=$('#account-password').value;const name=$('#account-name').value.trim();
+    message.textContent='Connecting…';
+    try{
+      if(!cloudClient){const response=await fetch('/api/config');const config=await response.json();if(!config.cloudConfigured||!window.supabase?.createClient)throw new Error('Supabase is not configured. Add the Supabase URL and anon key in Vercel and redeploy.');cloudClient=window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey);}
+      if(mode==='create'){
+        const {data,error}=await cloudClient.auth.signUp({email,password,options:{data:{name}}});if(error)throw error;
+        if(!data.session)throw new Error('Check your email to confirm the account, then open Team sign in again.');
+      }else{const {error}=await cloudClient.auth.signInWithPassword({email,password});if(error)throw error;}
+      const joined=await cloudRequest('POST',{action:'join',role:$('#account-role').value,code:$('#account-code').value,name});
+      cloudProfile=joined.profile;await refreshCloud();$('#account-dialog').close();message.textContent='';toast(`Signed in to Team NAS as ${cloudProfile.role}.`);
+    }catch(error){message.textContent=error.message||'Could not sign in.';}
+  }
 
   async function extractPdfText(file){
     if(!window.pdfjsLib){
@@ -50,6 +96,9 @@
   function nameForRole(){return state.role==='reviewer'?'R':'C';}
   function renderApp(){
     $('#role-select').value=state.role;$('#user-avatar').textContent=nameForRole();
+    $('#demo-role-wrap')?.classList.toggle('hidden',Boolean(cloudProfile));
+    $('#refresh-workspace')?.classList.toggle('hidden',!cloudProfile);
+    const accountButton=$('#account-button');if(accountButton)accountButton.textContent=cloudProfile?`Sign out · ${cloudProfile.role}`:'Team sign in';
     $$('.side-link').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
     $$('.reviewer-nav').forEach(b=>b.classList.toggle('hidden',state.role!=='reviewer'));
     const pending=state.drafts.filter(d=>d.status==='in_review'||d.status==='challenge').length;
@@ -57,12 +106,40 @@
     const node=$('#page-content');
     const pages={overview:overviewPage,'new-review':newReviewPage,history:historyPage,inbox:inboxPage,guidelines:guidelinesPage,help:helpPage,review:reviewPage};
     node.innerHTML=(pages[state.page]||overviewPage)();
+    if(state.page==='overview'){
+      const card=$$('.stat-card',node).find(item=>item.querySelector('span')?.textContent.includes('Web research'));
+      if(card){card.querySelector('strong').textContent='On demand';card.querySelector('small').textContent='Claim search with source links';}
+      const note=$$('.tip-box',node).find(item=>item.textContent.includes('AI review is guideline-only'));
+      if(note)note.innerHTML='<span class="activity-dot"></span><div><b>AI review checks guidelines and approved records.</b><br>Run claim research separately from a review result. OCR for scanned PDFs is not included.</div>';
+    }
+    if(state.page==='new-review'){
+      const callout=$$('.demo-callout',node)[0];if(callout)callout.innerHTML='<strong>Current AI scope</strong>Review against fictional rules and your team’s current approved records. Run a separate web research step on the results page for public-source evidence.';
+      const next=$$('h2',node).find(h=>h.textContent.trim()==='Next capabilities')?.closest('.panel');
+      if(next)next.innerHTML='<div class="panel-title"><div><h2>Review workflow</h2><p>What happens after the AI check</p></div></div><div class="guideline-row"><span class="guideline-id">01</span><div><strong>Web research</strong><p>Run a separate cited search for factual claims.</p></div></div><div class="guideline-row"><span class="guideline-id">02</span><div><strong>Human review</strong><p>Send this exact version to the shared reviewer inbox.</p></div></div><div class="guideline-row"><span class="guideline-id">03</span><div><strong>Version control</strong><p>Updates to approved records create a new version and can expire.</p></div></div>';
+    }
+    if(state.page==='help'){
+      const description=$$('.page-head p',node).find(p=>!p.classList.contains('page-kicker'));if(description)description.textContent='AI guideline review, selectable PDF extraction, cited web research, shared reviews, and versioned approved records.';
+      const next=$$('strong',node).find(el=>el.textContent.includes('Scanned-PDF OCR and web research'));
+      if(next){next.textContent='Scanned-PDF OCR';const p=next.parentElement.querySelector('p');if(p)p.textContent='OCR for image-only scans is not included. Web research is available on the review results page.';}
+      const localNote=$$('.tip-box',node).find(box=>box.textContent.includes('Drafts are stored in this browser only'));
+      if(localNote)localNote.innerHTML='<span class="activity-dot"></span><div>When signed in, reviews and approved records are stored in the shared Team NAS workspace. Without signing in, demo drafts stay in this browser only.</div>';
+    }
+    if(state.page==='review'&&currentDraft()){
+      const oldResearch=$$('h2',node).find(h=>h.textContent.trim()==='External research')?.closest('.panel');
+      if(oldResearch)oldResearch.remove();
+      $('.review-columns aside',node)?.insertAdjacentHTML('beforeend',researchPanel(currentDraft()));
+      const summary=$$('.demo-callout',node).find(box=>box.textContent.includes('AI guideline review complete'));
+      if(summary){const d=currentDraft();summary.innerHTML=`<strong>AI guideline review complete · web research available</strong>${esc(d.aiReview?.summary||'Review finished.')}<br><small>${Number(d.aiReview?.guidelinePackSize)||150} fictional starter rules were included. ${d.aiReview?.approvedRecordVersions?.length||0} current approved record versions were used. Findings cite source IDs; selectable PDF text was extracted in the browser. Use the panel below for public web research.</small>${(d.aiReview?.claims||[]).length?`<div style="margin-top:8px"><b>Claims needing external verification</b>${d.aiReview.claims.map(c=>`<p style="margin:5px 0"><b>${esc(c.claim)}</b> — ${esc(c.reason)} <span class="badge orange">Needs source review</span></p>`).join('')}</div>`:''}`;}
+      const articleNote=$$('.review-columns > div > section.panel .demo-callout',node)[0];
+      if(articleNote)articleNote.innerHTML='<strong>Versioned AI guideline review</strong>The result belongs to this exact draft version. Public research is a separate step, and a human reviewer makes the final decision.';
+    }
+    if(state.page==='guidelines'&&cloudProfile&&['admin','reviewer'].includes(cloudProfile.role))node.insertAdjacentHTML('beforeend',approvedRecordsPanel());
   }
   function itemRow(d){return `<div class="review-item" data-open-draft="${esc(d.id)}"><div class="file-icon">PDF</div><div class="review-item-main"><strong>${esc(d.title||d.fileName||'Untitled article')}</strong><small>${esc(d.fileName||'Text draft')} · v${d.version} · ${dateShort(d.updatedAt)}</small></div>${statusBadge(d.status)}<span aria-hidden="true">›</span></div>`;}
   function overviewPage(){
     const drafts=[...state.drafts].sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
     const pending=drafts.filter(d=>d.status==='in_review'||d.status==='challenge');
-    const own=drafts.filter(d=>d.createdBy===state.role||state.role==='reviewer');
+    const own=drafts.filter(d=>state.role==='reviewer'||d.createdBy===(cloudProfile?.id||'creator'));
     return `<div class="page-head"><div><p class="page-kicker">NORTHSTAR DEMO CO. · ${roleName().toUpperCase()} VIEW</p><h1>${state.role==='creator'?'Your workspace':'Reviewer overview'}</h1><p>${state.role==='creator'?'Check pasted article text against the fictional guidelines, then send a version for human review.':'Review submitted versions and creator challenges.'}</p></div><div class="page-actions">${state.role==='creator'?'<button class="button button-dark button-small" data-page="new-review">＋ New review</button>':'<button class="button button-soft button-small" data-page="inbox">Open inbox →</button>'}</div></div>
       <div class="stats-row"><div class="stat-card"><span>${state.role==='creator'?'Your drafts':'Open reviews'}</span><strong>${state.role==='creator'?state.drafts.length:pending.length}</strong><small>Saved in this browser</small></div><div class="stat-card"><span>Guideline pack</span><strong>150</strong><small>Fictional sample rules</small></div><div class="stat-card"><span>AI guideline review</span><strong>On</strong><small>Groq backend connected</small></div><div class="stat-card"><span>Web research</span><strong>Next</strong><small>External fact checks not connected</small></div></div>
       <div class="dashboard-grid"><section class="panel"><div class="panel-title"><div><h2>${state.role==='creator'?'Recent drafts':'Recently submitted'}</h2><p>${state.role==='creator'?'Continue a review or check its status.':'Open a draft to inspect its findings and decision history.'}</p></div><button class="small-button" data-page="${state.role==='creator'?'history':'inbox'}">View all</button></div><div class="review-list">${(state.role==='creator'?own:drafts).slice(0,5).map(itemRow).join('')||'<div class="empty-state"><b>No drafts here yet</b>Start a review by pasting article text, or load the fictional sample.</div>'}</div></section>
@@ -86,6 +163,33 @@
     const creatorActions=!reviewer?`<div class="finding-actions"><button class="small-button" data-action="revise">Edit article</button>${f.challengeStatus?challenge:`<button class="small-button warn" data-challenge="${esc(f.id)}">Challenge finding</button>`}</div>${state.openChallenge===f.id?`<div class="review-detail"><label class="field-label" for="challenge-note">What should the reviewer verify?</label><textarea class="text-area" id="challenge-note" placeholder="Share context or point to evidence."></textarea><div class="finding-actions"><button class="small-button primary" data-send-challenge="${esc(f.id)}">Send to reviewer</button><button class="small-button" data-action="cancel-challenge">Cancel</button></div></div>`:''}`:'';
     const reviewerActions=reviewer&&!f.challengeStatus?`<div class="finding-actions"><button class="small-button primary" data-resolve-challenge="${esc(f.id)}|dismissed">Dismiss flag</button><button class="small-button" data-resolve-challenge="${esc(f.id)}|confirmed">Confirm flag</button></div>`:'';
     return `<article class="finding-card ${cls}"><div class="finding-head"><h3 class="finding-claim">${esc(f.claim)}</h3><span class="badge ${f.status==='supported'?'green':f.status==='contradicted'?'red':'orange'}">${esc(label)}</span></div><p>${esc(f.explanation)}</p><div class="finding-meta"><span class="source-chip">${esc(f.source)}</span>${f.publicSource?`<span class="badge">Public web research · not connected</span>`:''}<span class="version-pill">DRAFT V${d.version}</span></div>${creatorActions}${reviewerActions}</article>`;
+  }
+  function researchPanel(d){
+    const result=d.researchResult;
+    const content=result?.content?esc(result.content).replace(/(https:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\n/g,'<br>'):'';
+    return `<section class="panel"><div class="panel-title"><div><h2>External claim research</h2><p>Web search with dated, linked evidence. A human still decides.</p></div><span class="badge ${result?'green':'orange'}">${result?'RESEARCHED':'ON DEMAND'}</span></div>${result?`<p class="field-hint">Searched ${esc(new Date(result.researchedAt).toLocaleString())}. Search results can be incomplete; open sources before relying on them.</p><div class="research-output">${content}</div>`:`<div class="empty-state" style="padding:12px 5px">${(d.aiReview?.claims||[]).length?`${d.aiReview.claims.length} claims need public-source research.`:'No claims were extracted. You can still search if a factual claim was missed.'}</div>`}<button class="small-button primary" id="run-research" ${d.researching?'disabled':''}>${d.researching?'Searching the web…':result?'Research again':'Research claims on the web'}</button></section>`;
+  }
+  function approvedRecordsPanel(){
+    const records=cloudRecords;
+    return `<section class="panel" style="margin-top:15px"><div class="panel-title"><div><h2>Approved facts & guideline versions</h2><p>Each save creates a new version with its source and expiry metadata.</p></div><span class="badge green">TEAM RECORDS</span></div><form id="record-form" class="record-form"><label class="field-label" for="record-type">Record type</label><select id="record-type" class="text-input"><option value="fact">Approved fact</option><option value="guideline">Guideline</option></select><label class="field-label" for="record-key">Stable key · reuse when updating a record</label><input class="text-input" id="record-key" placeholder="e.g. PRODUCT-PRICE" maxlength="80" required><label class="field-label" for="record-title">Title</label><input class="text-input" id="record-title" maxlength="180" required><label class="field-label" for="record-content">Approved content / rule</label><textarea class="text-area" id="record-content" maxlength="2000" required></textarea><label class="field-label" for="record-source">Source URL (optional)</label><input class="text-input" id="record-source" type="url" placeholder="https://..."><label class="field-label" for="record-expiry">Valid until (optional)</label><input class="text-input" id="record-expiry" type="date"><button class="button button-dark button-small" type="submit">Save new version</button></form><h3 style="font-size:12px;margin:20px 0 9px">Version history (${records.length})</h3>${records.slice(0,30).map(r=>`<article class="guideline-row"><span class="guideline-id">V${r.version}</span><div><strong>${esc(r.title)} · ${esc(r.record_type)}</strong><p>${esc(r.content)}</p><p>Key ${esc(r.record_key)} · ${r.valid_until?`Valid until ${esc(r.valid_until)}`:'No expiry'} · ${r.source_url?`<a href="${esc(r.source_url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>`:'No source link'}</p></div></article>`).join('')||'<div class="empty-state">No approved records yet. Add a current fact or a reviewed guideline above.</div>'}</section>`;
+  }
+  async function addApprovedRecord(event){
+    event.preventDefault();
+    try{
+      await cloudRequest('POST',{action:'add-record',record:{record_type:$('#record-type').value,record_key:$('#record-key').value,title:$('#record-title').value,content:$('#record-content').value,source_url:$('#record-source').value,valid_until:$('#record-expiry').value||null}});
+      const form=$('#record-form');form.reset();const result=await cloudRequest();cloudRecords=result.records||[];renderApp();toast('Saved as a new approved record version.');
+    }catch(error){toast(error.message||'Could not save approved record.');}
+  }
+  async function researchClaims(){
+    const d=currentDraft();if(!d)return;
+    d.researching=true;save();renderApp();
+    try{
+      const claims=d.aiReview?.claims||[];
+      const response=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({claims:claims.length?claims:[{claim:d.body.slice(0,350),reason:'Search for claims that need independent evidence.'}]})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||`Research request failed (${response.status}).`);
+      d.researchResult={content:result.content,researchedAt:result.researched_at};d.researching=false;d.updatedAt=new Date().toISOString();save();await persistDraft(d);renderApp();toast('Web research finished. Open the linked sources before relying on the findings.');
+    }catch(error){d.researching=false;save();renderApp();toast(error.message||'Web research failed.');}
   }
   function reviewPage(){
     const d=currentDraft();if(!d)return `<div class="page-head"><div><p class="page-kicker">REVIEW</p><h1>Draft not found</h1></div><button class="button button-dark" data-page="overview">Go to overview</button></div>`;
@@ -124,32 +228,37 @@
     if(!body){toast(selectedFile?'The PDF has no extracted text yet. Choose a text-based PDF or paste its text.':'Paste article text or attach a text-based PDF first.');return;}
     button.disabled=true;button.textContent='Reviewing against guidelines…';
     try{
-      const response=await fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,brief,articleText:body})});
+      const headers={'Content-Type':'application/json'};if(cloudProfile){const {data}=await cloudClient.auth.getSession();headers.Authorization=`Bearer ${data.session.access_token}`;}
+      const response=await fetch('/api/review',{method:'POST',headers,body:JSON.stringify({title,brief,articleText:body})});
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||`Review request failed (${response.status}).`);
       const findings=(result.findings||[]).map((f,index)=>({id:f.id||`ai-${index+1}`,claim:f.quote||'Guideline issue',status:f.issue_type==='guideline_conflict'?'contradicted':f.issue_type==='clarity'?'unverified':'unsupported',explanation:`${f.explanation||''}${f.suggested_revision?` Suggested revision: ${f.suggested_revision}`:''}`,source:`Guideline ${Array.isArray(f.guideline_ids)?f.guideline_ids.join(', '):'reference unavailable'}`,priority:f.priority,challengeStatus:'',aiFinding:true}));
-      const reviewInfo={summary:result.summary,model:result.model,guidelinePackSize:result.guideline_pack_size,claims:result.claims_requiring_external_verification||[],externalResearchPerformed:result.external_research_performed};
+      const reviewInfo={summary:result.summary,model:result.model,guidelinePackSize:result.guideline_pack_size,approvedRecordVersions:result.approved_record_versions_used||[],claims:result.claims_requiring_external_verification||[],externalResearchPerformed:result.external_research_performed};
       if(existing){existing.title=title;existing.brief=brief;existing.body=body;existing.fileName=selectedFile?.name||existing.fileName||'';existing.version+=1;existing.updatedAt=new Date().toISOString();existing.status='draft';existing.approvedVersion=null;existing.reviewerNote='';existing.challenge=null;existing.findings=findings;existing.aiReview=reviewInfo;state.activeDraftId=existing.id;}
-      else{const d={id:`EM-${String(state.seq++).padStart(4,'0')}`,title,brief,body,fileName:selectedFile?.name||'',version:1,status:'draft',createdBy:'creator',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),findings,aiReview:reviewInfo,approvedVersion:null,reviewerNote:'',challenge:null};state.drafts.unshift(d);state.activeDraftId=d.id;}
-      const d=currentDraft();d.status='checked';d.updatedAt=new Date().toISOString();state.editingId=null;state.page='review';state.openChallenge=null;save();renderApp();toast('AI guideline review complete. Claims still need external verification.');
+      else{const uniqueId=window.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2,9)}`;const d={id:`EM-${uniqueId}`,title,brief,body,fileName:selectedFile?.name||'',version:1,status:'draft',createdBy:cloudProfile?.id||'creator',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),findings,aiReview:reviewInfo,approvedVersion:null,reviewerNote:'',challenge:null};state.seq+=1;state.drafts.unshift(d);state.activeDraftId=d.id;}
+      const d=currentDraft();d.status='checked';d.updatedAt=new Date().toISOString();state.editingId=null;state.page='review';state.openChallenge=null;save();await persistDraft(d);renderApp();toast('AI guideline review complete. Claims still need external verification.');
     }catch(error){toast(error.message||'Could not complete the AI review. Please retry.');}
     finally{if(button){button.disabled=false;button.innerHTML='Run AI guideline review <span>→</span>';}}
   }
   function beginEdit(){const d=currentDraft();if(!d)return;state.editingId=d.id;state.page='new-review';selectedFile=null;save();renderApp();}
-  function submitToReviewer(){const d=currentDraft();if(!d)return;d.status='in_review';d.submittedVersion=d.version;d.updatedAt=new Date().toISOString();save();renderApp();toast(`Version ${d.version} sent to the reviewer.`);}
-  function reviewerDecision(decision){const d=currentDraft();if(!d)return;const note=$('#reviewer-note')?.value.trim()||'';d.reviewerNote=note;d.updatedAt=new Date().toISOString();if(decision==='approve'){d.status='approved';d.approvedVersion=d.version;d.decisionBy='Reviewer';d.decisionAt=new Date().toISOString();}else{if(!note){toast('Add a short reason before returning the draft.');return;}d.status='returned';d.approvedVersion=null;d.decisionBy='Reviewer';d.decisionAt=new Date().toISOString();}save();renderApp();toast(decision==='approve'?`Version ${d.version} approved and ready to publish.`:'Draft returned with reviewer notes.');}
+  function submitToReviewer(){const d=currentDraft();if(!d)return;d.status='in_review';d.submittedVersion=d.version;d.updatedAt=new Date().toISOString();save();persistDraft(d);renderApp();toast(`Version ${d.version} sent to the reviewer.`);}
+  function reviewerDecision(decision){const d=currentDraft();if(!d)return;const note=$('#reviewer-note')?.value.trim()||'';d.reviewerNote=note;d.updatedAt=new Date().toISOString();if(decision==='approve'){d.status='approved';d.approvedVersion=d.version;d.decisionBy=cloudProfile?.display_name||'Reviewer';d.decisionAt=new Date().toISOString();}else{if(!note){toast('Add a short reason before returning the draft.');return;}d.status='returned';d.approvedVersion=null;d.decisionBy=cloudProfile?.display_name||'Reviewer';d.decisionAt=new Date().toISOString();}save();persistDraft(d);renderApp();toast(decision==='approve'?`Version ${d.version} approved and ready to publish.`:'Draft returned with reviewer notes.');}
   function openDraft(id){state.activeDraftId=id;state.page='review';save();renderApp();}
-  function addChallenge(findingId){const d=currentDraft();if(!d)return;const note=$('#challenge-note')?.value.trim();if(!note){toast('Add a note so the reviewer knows what to verify.');return;}d.challenge={findingId,note,status:'pending',createdAt:new Date().toISOString()};d.status='challenge';d.updatedAt=new Date().toISOString();save();renderApp();toast('Challenge sent to the reviewer.');}
-  function resolveChallenge(value){const [findingId,result]=value.split('|');const d=currentDraft();if(!d)return;const f=d.findings.find(x=>x.id===findingId);if(f)f.challengeStatus=result;if(d.challenge)d.challenge.status=result;d.reviewerNote=$('#reviewer-note')?.value.trim()||d.reviewerNote;d.status='in_review';d.updatedAt=new Date().toISOString();save();renderApp();toast(result==='dismissed'?'Finding dismissed by reviewer.':'Finding confirmed by reviewer.');}
+  function addChallenge(findingId){const d=currentDraft();if(!d)return;const note=$('#challenge-note')?.value.trim();if(!note){toast('Add a note so the reviewer knows what to verify.');return;}d.challenge={findingId,note,status:'pending',createdAt:new Date().toISOString()};d.status='challenge';d.updatedAt=new Date().toISOString();save();persistDraft(d);renderApp();toast('Challenge sent to the reviewer.');}
+  function resolveChallenge(value){const [findingId,result]=value.split('|');const d=currentDraft();if(!d)return;const f=d.findings.find(x=>x.id===findingId);if(f)f.challengeStatus=result;if(d.challenge)d.challenge.status=result;d.reviewerNote=$('#reviewer-note')?.value.trim()||d.reviewerNote;d.status='in_review';d.updatedAt=new Date().toISOString();save();persistDraft(d);renderApp();toast(result==='dismissed'?'Finding dismissed by reviewer.':'Finding confirmed by reviewer.');}
   document.addEventListener('click',e=>{
     const open=e.target.closest('[data-open-app]');if(open){openApp();return;}
     if(e.target.closest('#back-landing')||e.target.closest('#brand-home')){e.preventDefault();returnLanding();return;}
+    if(e.target.closest('#account-button')){if(cloudProfile){cloudClient?.auth.signOut();cloudProfile=null;cloudRecords=[];state.drafts=[];state.role='creator';save();renderApp();toast('Signed out. Local demo remains available.');}else{$('#account-error').textContent='';$('#account-dialog').showModal();}return;}
+    if(e.target.closest('#refresh-workspace')){refreshCloud().then(()=>toast('Shared workspace refreshed.')).catch(error=>toast(error.message));return;}
+    if(e.target.closest('#account-close')){$('#account-dialog').close();return;}
     const page=e.target.closest('[data-page]');if(page){setPage(page.dataset.page);return;}
     const draft=e.target.closest('[data-open-draft]');if(draft){openDraft(draft.dataset.openDraft);return;}
     if(e.target.closest('#menu-toggle')){$('#sidebar').classList.toggle('open');return;}
     if(e.target.closest('#browse-file')){$('#pdf-file').click();return;}
     if(e.target.closest('#use-sample')){$('#article-title').value=sampleTitle;$('#creator-brief').value=sampleBrief;$('#article-text').value=sampleBody;$('#word-count').textContent=`${wordCount(sampleBody)} words`;toast('Fictional sample article loaded.');return;}
     if(e.target.closest('#run-demo')){createOrUpdateDraft();return;}
+    if(e.target.closest('#run-research')){researchClaims();return;}
     if(e.target.closest('#remove-file')){selectedFile=null;if(fileUrl){URL.revokeObjectURL(fileUrl);fileUrl=null;}$('#attached-file').innerHTML='';return;}
     if(e.target.closest('#more-rules')){state.ruleLimit+=30;guidelineResults();return;}
     if(e.target.closest('#reset-demo')){localStorage.removeItem(storeKey);state=load();selectedFile=null;setPage('overview');toast('Local demo data reset.');return;}
@@ -163,6 +272,7 @@
     const resolve=e.target.closest('[data-resolve-challenge]');if(resolve){resolveChallenge(resolve.dataset.resolveChallenge);return;}
   });
   document.addEventListener('change',async e=>{
+    if(e.target.id==='account-mode'){$('#account-name').required=e.target.value==='create';return;}
     if(e.target.id==='role-select'){state.role=e.target.value;if(state.role==='reviewer'&&state.page==='new-review')state.page='overview';save();renderApp();return;}
     if(e.target.id==='pdf-file'){
       const file=e.target.files?.[0];if(!file)return;
@@ -185,5 +295,10 @@
   });
   document.addEventListener('input',e=>{if(e.target.id==='article-text')$('#word-count').textContent=`${wordCount(e.target.value)} words`;if(e.target.id==='guideline-query')guidelineResults();});
   const dz=$('#dropzone');if(dz){dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');const file=e.dataTransfer.files?.[0];if(!file)return;const input=$('#pdf-file');const dt=new DataTransfer();dt.items.add(file);input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));});}
+  $('#account-form')?.addEventListener('submit',handleAccount);
+  document.addEventListener('submit',e=>{if(e.target.id==='record-form')addApprovedRecord(e);});
+  const landingNote=$$('.cta-inner small')[0];if(landingNote)landingNote.textContent='Selectable PDF text and fictional-guideline AI review · web search is available on review results · scanned-PDF OCR is not included';
+  const webCard=$$('.web-mini')[0];if(webCard){const label=$('span',webCard);if(label)label.textContent='GROQ WEB SEARCH · SOURCES';const small=$('small',webCard);if(small)small.textContent='Dated source links for human review.';}
   renderApp();
+  initCloud();
 })();
