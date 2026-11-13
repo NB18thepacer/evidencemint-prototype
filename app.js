@@ -166,7 +166,7 @@
   }
   function researchPanel(d){
     const result=d.researchResult;
-    const content=result?.content?esc(result.content).replace(/(https:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\n/g,'<br>'):'';
+    const content=result?.content?esc(result.content).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/(https:\/\/[^\s<>"']+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\n/g,'<br>'):'';
     return `<section class="panel"><div class="panel-title"><div><h2>External claim research</h2><p>Web search with dated, linked evidence. A human still decides.</p></div><span class="badge ${result?'green':'orange'}">${result?'RESEARCHED':'ON DEMAND'}</span></div>${result?`<p class="field-hint">Searched ${esc(new Date(result.researchedAt).toLocaleString())}. Search results can be incomplete; open sources before relying on them.</p><div class="research-output">${content}</div>`:`<div class="empty-state" style="padding:12px 5px">${(d.aiReview?.claims||[]).length?`${d.aiReview.claims.length} claims need public-source research.`:'No claims were extracted. You can still search if a factual claim was missed.'}</div>`}<button class="small-button primary" id="run-research" ${d.researching?'disabled':''}>${d.researching?'Searching the web…':result?'Research again':'Research claims on the web'}</button></section>`;
   }
   function approvedRecordsPanel(){
