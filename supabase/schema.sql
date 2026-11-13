@@ -88,21 +88,42 @@ create policy "Members read reviews" on public.reviews for select to authenticat
 using (workspace_id = public.evidencemint_my_workspace());
 drop policy if exists "Members create reviews" on public.reviews;
 create policy "Members create reviews" on public.reviews for insert to authenticated
-with check (workspace_id = public.evidencemint_my_workspace() and creator_id = auth.uid() and payload->>'status' <> 'approved');
+with check (workspace_id = public.evidencemint_my_workspace() and public.evidencemint_my_role() = 'creator' and creator_id = auth.uid() and payload->>'status' <> 'approved');
 drop policy if exists "Members update reviews" on public.reviews;
 create policy "Members update reviews" on public.reviews for update to authenticated
-using (workspace_id = public.evidencemint_my_workspace() and (creator_id = auth.uid() or public.evidencemint_my_role() in ('admin','reviewer')))
-with check (workspace_id = public.evidencemint_my_workspace() and (creator_id = auth.uid() or public.evidencemint_my_role() in ('admin','reviewer')) and (public.evidencemint_my_role() in ('admin','reviewer') or payload->>'status' <> 'approved'));
+using (workspace_id = public.evidencemint_my_workspace() and ((public.evidencemint_my_role() = 'creator' and creator_id = auth.uid()) or public.evidencemint_my_role() = 'reviewer'))
+with check (workspace_id = public.evidencemint_my_workspace() and ((public.evidencemint_my_role() = 'creator' and creator_id = auth.uid()) or public.evidencemint_my_role() = 'reviewer') and (public.evidencemint_my_role() = 'reviewer' or payload->>'status' <> 'approved'));
 
 create or replace function public.evidencemint_guard_review_update()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if auth.role() = 'service_role' then return new; end if;
-  if old.creator_id <> auth.uid() and public.evidencemint_my_role() not in ('admin','reviewer') then
-    raise exception 'Only the creator or an authorised reviewer can update this review';
-  end if;
-  if public.evidencemint_my_role() = 'creator' and new.payload->>'status' = 'approved' then
-    raise exception 'Only an authorised reviewer can approve a review';
+  if public.evidencemint_my_role() = 'admin' then
+    raise exception 'Admins manage guidelines; they do not update review decisions';
+  elsif public.evidencemint_my_role() = 'creator' then
+    if old.creator_id <> auth.uid() then raise exception 'Creators can only update their own reviews'; end if;
+    if new.payload->>'status' = 'approved' then raise exception 'Only a reviewer can approve a review'; end if;
+    if new.payload->>'status' = 'in_review' and old.payload->>'status' not in ('checked','returned','in_review') then
+      raise exception 'Run the AI review before submitting to a reviewer';
+    end if;
+    if new.payload->>'status' = 'challenge' and (old.payload->>'status' <> 'in_review' or length(trim(coalesce(new.payload#>>'{challenge,note}',''))) = 0) then
+      raise exception 'A finding challenge requires a submitted review and a reason';
+    end if;
+  elsif public.evidencemint_my_role() = 'reviewer' then
+    if old.payload->>'status' not in ('in_review','challenge','returned') then
+      raise exception 'This review is not awaiting a reviewer decision';
+    end if;
+    if new.payload->>'status' not in ('approved','returned','in_review') then
+      raise exception 'Reviewer may approve, return, or resolve a challenge';
+    end if;
+    if new.payload->>'status' = 'approved' and coalesce(new.payload->>'approvedVersion','') <> coalesce(new.payload->>'version','') then
+      raise exception 'Only the exact submitted version can be approved';
+    end if;
+    if new.payload->>'status' = 'returned' and length(trim(coalesce(new.payload->>'reviewerNote',''))) = 0 then
+      raise exception 'Add a reason before returning the draft';
+    end if;
+  else
+    raise exception 'Role is not authorised to update reviews';
   end if;
   return new;
 end;
@@ -119,7 +140,7 @@ create policy "Admins add approved record versions" on public.approved_records f
 with check (
   workspace_id = public.evidencemint_my_workspace()
   and created_by = auth.uid()
-  and public.evidencemint_my_role() in ('admin','reviewer')
+  and public.evidencemint_my_role() = 'admin'
 );
 
 grant usage on schema public to authenticated;
