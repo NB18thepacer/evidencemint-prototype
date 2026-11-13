@@ -18,6 +18,8 @@ EvidenceMint helps marketing and product teams review article claims before publ
 4. The creator submits that exact version to the reviewer. The reviewer approves it as ready to publish or returns it with a reason.
 5. Editing makes a new version and clears prior approval. EvidenceMint does not publish to a CMS.
 
+For the public demo, select **Demo Admin** in the role menu, open **Guideline pack**, and add or edit a demo rule. Demo Admin changes are stored only in that browser, do not change Team NAS records, and are included in later AI reviews in that same demo browser. Switch to **Creator** to try a review against the added rule. The demo allows up to 10 custom rules.
+
 ## Live prototype capabilities
 
 - AI guideline review through the server-side Groq endpoint
@@ -27,11 +29,13 @@ EvidenceMint helps marketing and product teams review article claims before publ
 - Team accounts, workspace invitations and creator/reviewer/admin roles (when Supabase is configured)
 - Shared draft and reviewer-decision workflow (when signed in)
 - Admin-managed approved fact/guideline records with version history, source and expiry metadata
+- Public Demo Admin can add or version up to 10 browser-local custom guidelines; the AI review uses active demo rules
 - Browser-local demo mode when not signed in
 
 ## Boundaries
 
 - The 150 starter guidelines are fictional demonstration content. Replace them with an organisation's reviewed rules and facts before any real use.
+- Demo Admin rules are isolated to the current browser and are not shared or written to the team database.
 - AI and web research can be wrong or incomplete. Human reviewers remain responsible for decisions.
 - Scanned PDF OCR is not included; use a PDF with selectable text or paste the text.
 - This is a hackathon prototype, not a security-audited service. Do not upload confidential real-company material.
