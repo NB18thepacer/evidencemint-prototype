@@ -7,8 +7,8 @@ EvidenceMint helps marketing and product teams review article claims before publ
 ## Round 3 improvements
 
 1. **Claim research:** Groq Browser Search gathers dated public-source evidence for factual claims. Sources are linked for people to inspect; this is not a guarantee of truth.
-2. **Versioned approved information:** Admins/reviewers can add company facts and guidelines with stable keys, source URLs and expiry dates. Updates create a new version. Expired latest versions are excluded from AI review.
-3. **Shared role-based workflow:** Supabase Auth and database storage let teammates share reviews. The server checks account roles before approving drafts or adding approved records.
+2. **Versioned approved information:** Admins can add company facts and guidelines with stable keys, source URLs and expiry dates. Updates create a new version. Expired latest versions are excluded from AI review.
+3. **Shared role-based workflow:** Supabase Auth and database storage let teammates share reviews. Creators submit drafts, Reviewers alone make final approve/return decisions, and Admins maintain approved records.
 
 ## Main workflow
 
@@ -26,7 +26,7 @@ EvidenceMint helps marketing and product teams review article claims before publ
 - Web-search research action with direct links and research timestamp
 - Team accounts, workspace invitations and creator/reviewer/admin roles (when Supabase is configured)
 - Shared draft and reviewer-decision workflow (when signed in)
-- Approved fact/guideline records with version history, source and expiry metadata
+- Admin-managed approved fact/guideline records with version history, source and expiry metadata
 - Browser-local demo mode when not signed in
 
 ## Boundaries

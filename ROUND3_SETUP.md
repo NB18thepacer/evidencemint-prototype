@@ -24,8 +24,8 @@ This prototype keeps the existing Groq review endpoint and adds three Round 3 im
 ## Team accounts
 
 - Open the deployed site and enter the workspace. Select **Team sign in → Create account**, use a unique email/password, choose the role, and enter the matching invite code shared privately by the team admin.
-- Use **Creator** for people who submit drafts, **Reviewer** for people who decide, and **Admin** for the person who maintains approved facts/guidelines and can also review.
-- Each teammate must create their own account. The role selector is disabled after sign-in; the server checks permissions before saving approvals or approved records.
+- Use **Creator** for people who submit drafts, **Reviewer** for the person who makes final approve/return decisions, and **Admin** for the person who maintains approved facts and guidelines. Admins do not make review decisions.
+- Each teammate must create their own account. The role selector is disabled after sign-in; the server checks permissions so only Reviewers can approve/return drafts and only Admins can add or version approved records.
 - Do not submit real confidential company material in this public hackathon prototype. This is a small event build, not a security-audited production service.
 
 ## Product workflow
