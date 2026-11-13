@@ -52,8 +52,11 @@ module.exports = async function handler(req, res) {
     const workspace = encodeURIComponent(profile.workspace_id);
 
     if (req.method === 'GET') {
+      const reviewQuery = profile.role === 'admin'
+        ? null
+        : `${base}/rest/v1/reviews?workspace_id=eq.${workspace}${profile.role === 'creator' ? `&creator_id=eq.${encodeURIComponent(user.id)}` : ''}&select=id,creator_id,payload,updated_at&order=updated_at.desc`;
       const [reviewsResponse, recordsResponse] = await Promise.all([
-        fetch(`${base}/rest/v1/reviews?workspace_id=eq.${workspace}&select=id,creator_id,payload,updated_at&order=updated_at.desc`, { headers }),
+        reviewQuery ? fetch(reviewQuery, { headers }) : Promise.resolve({ ok: true, json: async () => [] }),
         fetch(`${base}/rest/v1/approved_records?workspace_id=eq.${workspace}&select=id,record_key,record_type,version,title,content,source_url,valid_until,created_at,active&order=created_at.desc`, { headers })
       ]);
       if (!reviewsResponse.ok) throw new Error(await reviewsResponse.text());
@@ -62,17 +65,20 @@ module.exports = async function handler(req, res) {
     }
 
     if (body.action === 'save-review') {
+      if (profile.role === 'admin') return reply(res, 403, { error: 'Admins manage guidelines; only creators and reviewers can update reviews.' });
       const draft = body.draft;
       if (!draft || typeof draft.id !== 'string' || !draft.payload || typeof draft.payload !== 'object') return reply(res, 400, { error: 'Invalid review record.' });
       const existingResponse = await fetch(`${base}/rest/v1/reviews?workspace_id=eq.${workspace}&id=eq.${encodeURIComponent(draft.id)}&select=creator_id,payload&limit=1`, { headers });
       if (!existingResponse.ok) throw new Error(await existingResponse.text());
       const priorDraft = (await existingResponse.json())[0];
+      if (profile.role === 'reviewer' && !priorDraft) return reply(res, 403, { error: 'Reviewers can only decide on a submitted creator review.' });
+      if (profile.role === 'reviewer' && !['in_review','challenge','returned'].includes(priorDraft?.payload?.status)) return reply(res, 409, { error: 'This review is not awaiting a reviewer decision.' });
       if (profile.role === 'creator' && priorDraft && priorDraft.creator_id !== user.id) return reply(res, 403, { error: 'Creators can only edit their own reviews.' });
       if (profile.role === 'creator' && draft.payload.status === 'approved') return reply(res, 403, { error: 'Only a reviewer can approve a version.' });
       if (profile.role === 'creator' && draft.payload.status === 'in_review' && (!priorDraft || !['checked','returned'].includes(priorDraft.payload?.status))) return reply(res, 409, { error: 'Run the AI review before sending a version to a reviewer.' });
       if (profile.role === 'creator' && draft.payload.status === 'challenge' && (!priorDraft || priorDraft.payload?.status !== 'in_review' || !String(draft.payload.challenge?.note || '').trim())) return reply(res, 409, { error: 'A challenge can be raised only after submission and must include a reason.' });
-      if (['admin','reviewer'].includes(profile.role) && draft.payload.status === 'approved' && (!priorDraft || !['in_review','challenge','returned'].includes(priorDraft.payload?.status) || Number(draft.payload.approvedVersion) !== Number(draft.payload.version))) return reply(res, 409, { error: 'Only the exact submitted version can be approved.' });
-      if (['admin','reviewer'].includes(profile.role) && draft.payload.status === 'returned' && !String(draft.payload.reviewerNote || '').trim()) return reply(res, 400, { error: 'Add a reason before returning the draft.' });
+      if (profile.role === 'reviewer' && draft.payload.status === 'approved' && (!priorDraft || !['in_review','challenge','returned'].includes(priorDraft.payload?.status) || Number(draft.payload.approvedVersion) !== Number(draft.payload.version))) return reply(res, 409, { error: 'Only the exact submitted version can be approved.' });
+      if (profile.role === 'reviewer' && draft.payload.status === 'returned' && !String(draft.payload.reviewerNote || '').trim()) return reply(res, 400, { error: 'Add a reason before returning the draft.' });
       const saved = await fetch(`${base}/rest/v1/reviews?on_conflict=workspace_id,id`, {
         method: 'POST', headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=representation' },
         body: JSON.stringify({ id: draft.id, workspace_id: profile.workspace_id, creator_id: priorDraft?.creator_id || user.id, payload: draft.payload, updated_at: new Date().toISOString() })
@@ -82,7 +88,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (body.action === 'add-record') {
-      if (!['admin', 'reviewer'].includes(profile.role)) return reply(res, 403, { error: 'Only an admin or reviewer can update approved information.' });
+      if (profile.role !== 'admin') return reply(res, 403, { error: 'Only an admin can update approved facts and guidelines.' });
       const record = body.record || {};
       const type = ['fact', 'guideline'].includes(record.record_type) ? record.record_type : '';
       const key = String(record.record_key || '').trim().slice(0, 80);
